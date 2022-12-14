@@ -1,83 +1,87 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.4.22 <0.9.0;
 
-contract SnaccMachine {
+interface ISnaccMachine {
     struct Snack {
-        string name;
         uint amount;
         uint price;
     }
 
+    function getSnacks() external view returns (Snack[] memory);
+    function buySnack(string memory snackName) external payable;
+    function refillSnack(string memory snackName, uint amount) external;
+    function addSnack(string memory snackName, uint amount, uint price) external;
+    function withdraw() external;
+
+    error CallerNotOwner(address caller, address owner);
+    error SnackDoesNotExist(string snackName);
+    error SnackSoldOut(string snackName);
+    error SnackAlreadyExists(string snackName);
+    error NotEnoughValueSent(uint sent, uint expected);
+}
+
+contract SnaccMachine is ISnaccMachine {
     address public owner;
-    Snack[] snacks;
+    mapping(string => Snack) snacks;
+    string[] snackNames;
 
     constructor() {
         owner = msg.sender;
-        snacks.push(Snack("Snickers",  5, 1));
-        snacks.push(Snack("Mars",     10, 2));
-        snacks.push(Snack("Bounty",   15, 3));
-        snacks.push(Snack("Twix",     20, 4));
+        addSnack("Snickers", 5, 1   ether / 1000); // 0.0010
+        addSnack("Mars",    10, 2.5 ether / 1000); // 0.0025
+        addSnack("Bounty",  15, 3   ether / 1000); // 0.0030
+        addSnack("Twix",    20, 3.5 ether / 1000); // 0.0035
     }
 
-    function getSnacks() public view returns (Snack[] memory) {
-        return snacks;
+    function getSnacks() external view override returns (Snack[] memory) {
+        Snack[] memory snacksView = new Snack[](snackNames.length);
+
+        for (uint index = 0; index < snackNames.length; index++) {
+            snacksView[index] = snacks[snackNames[index]];
+        }
+
+        return snacksView;
     }
 
-    function buySnack(string memory _snackName) public payable {
-        require(exists(_snackName), "The snack must exist in order to be bought.");
-        require(isStocked(_snackName), "The snack must be stocked in order to be bought.");
-        require(msg.value > getSnack(_snackName).price, "You must send more money in order to buy the snack.");
+    function buySnack(string memory snackName) external payable override enforceSnackExists(snackName) {
+        if (snacks[snackName].amount == 0) revert SnackSoldOut(snackName);
+        if (msg.value < snacks[snackName].price) revert NotEnoughValueSent(msg.value, snacks[snackName].price);
 
-        Snack storage snack = getSnack(_snackName);
-        snack.amount = snack.amount - 1;
-        
-        uint change = msg.value - snack.price;
+        snacks[snackName].amount -= 1;
+
+        uint change = msg.value - snacks[snackName].price;
         payable(msg.sender).transfer(change);
     }
 
-    function refillSnack(string memory _snackName, uint _amount) public {
-        require(msg.sender == owner, "Only the owner can refill snacks.");
-        require(exists(_snackName), "The snack must exist in order to be refilled.");
-
-        Snack storage snack = getSnack(_snackName);
-        snack.amount = snack.amount + _amount;
+    function refillSnack(string memory snackName, uint amount) external override enforceCallerIsOwner() enforceSnackExists(snackName) {
+        snacks[snackName].amount += amount;
     }
 
-    function addSnack(string memory _snackName, uint _amount, uint _price) public {
-        require(msg.sender == owner, "Only the owner can add snacks.");
-        require(exists(_snackName) == false, "The snack already exists, please refill instead.");
-
-        snacks.push(Snack(_snackName, _amount, _price));
+    function addSnack(string memory snackName, uint amount, uint price) public override  enforceCallerIsOwner() enforceSnackDoesNotExist(snackName) {
+        snacks[snackName] = Snack(amount, price);
+        snackNames.push(snackName);
     }
 
-    // Helper functions
-    function exists(string memory _snackName) private view returns (bool) {
-        for (uint i = 0; i < snacks.length; i++) {
-            if (keccak256(abi.encodePacked(snacks[i].name)) == keccak256(abi.encodePacked(_snackName))) {
-                return true;
-            }
-        }
-        return false;
+    function withdraw() external override enforceCallerIsOwner() {
+        payable(msg.sender).transfer(address(this).balance);
     }
 
-    function isStocked(string memory _snackName) private view returns (bool) {
-        for (uint i = 0; i < snacks.length; i++) {
-            if (keccak256(abi.encodePacked(snacks[i].name)) == keccak256(abi.encodePacked(_snackName))) {
-                if (snacks[i].amount > 0) {
-                    return true;
-                }
-            }
-        }
-        return false;
+    modifier enforceCallerIsOwner() {
+        if (msg.sender != owner) revert CallerNotOwner(msg.sender, owner);
+        _;
     }
 
-    // Make sure to call exists() or require(exists()) before calling getSnack()
-    function getSnack(string memory _snackName) private view returns (Snack storage) {
-        for (uint i = 0; i < snacks.length; i++) {
-            if (keccak256(abi.encodePacked(snacks[i].name)) == keccak256(abi.encodePacked(_snackName))) {
-                return snacks[i];
-            }
-        }
-        revert();
+    modifier enforceSnackExists(string memory snackName) {
+        if (exists(snackName) == false) revert SnackDoesNotExist(snackName);
+        _;
+    }
+
+    modifier enforceSnackDoesNotExist(string memory snackName) {
+        if (exists(snackName)) revert SnackAlreadyExists(snackName);
+        _;
+    }
+
+    function exists(string memory snackName) internal view returns (bool) {
+        return snacks[snackName].price != 0;
     }
 }
