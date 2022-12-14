@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 
 interface ISnaccMachine {
     struct Snacc {
+        string name;
         uint amount;
         uint priceInWei;
     }
@@ -52,7 +53,7 @@ contract SnaccMachine is ISnaccMachine {
     }
 
     function addSnacc(string memory snaccName, uint amount, uint priceInWei) public override enforceCallerIsOwner() enforceSnaccNotAlreadyAdded(snaccName) {
-        snaccs[snaccName] = Snacc(amount, priceInWei);
+        snaccs[snaccName] = Snacc(snaccName, amount, priceInWei);
         snaccNames.push(snaccName);
     }
 
@@ -61,7 +62,7 @@ contract SnaccMachine is ISnaccMachine {
     }
 
     function exists(string memory snaccName) internal view returns (bool) {
-        return snaccs[snaccName].priceInWei != 0;
+        return keccak256(abi.encodePacked(snaccs[snaccName].name)) != "" && snaccs[snaccName].priceInWei != 0;
     }
 
     modifier enforceSnaccExists(string memory snaccName) {

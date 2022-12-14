@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 // Source: https://solidity-by-example.org/ether-units/
-// For reference
 pragma solidity 0.8.17;
 
 contract EtherUnits {
