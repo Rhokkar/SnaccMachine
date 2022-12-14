@@ -27,10 +27,10 @@ contract SnaccMachine is ISnaccMachine {
 
     constructor() {
         owner = msg.sender;
-        addSnack("Snickers", 5, 1   ether / 1000); // 0.0010
-        addSnack("Mars",    10, 2.5 ether / 1000); // 0.0025
-        addSnack("Bounty",  15, 3   ether / 1000); // 0.0030
-        addSnack("Twix",    20, 3.5 ether / 1000); // 0.0035
+        addSnack("Snickers", 5, 1   ether / 10000); // 0.00010
+        addSnack("Mars",    10, 2.5 ether / 10000); // 0.00025
+        addSnack("Bounty",  15, 3   ether / 10000); // 0.00030
+        addSnack("Twix",    20, 3.5 ether / 10000); // 0.00035
     }
 
     function getSnacks() external view override returns (Snack[] memory) {
@@ -57,7 +57,7 @@ contract SnaccMachine is ISnaccMachine {
         snacks[snackName].amount += amount;
     }
 
-    function addSnack(string memory snackName, uint amount, uint price) public override  enforceCallerIsOwner() enforceSnackDoesNotExist(snackName) {
+    function addSnack(string memory snackName, uint amount, uint price) public override enforceCallerIsOwner() enforceSnackDoesNotExist(snackName) {
         snacks[snackName] = Snack(amount, price);
         snackNames.push(snackName);
     }
