@@ -2,68 +2,81 @@
 pragma solidity 0.8.17;
 
 interface ISnaccMachine {
-    struct Snack {
+    struct Snacc {
         uint amount;
-        uint price;
+        uint priceInWei;
     }
 
-    function getSnacks() external view returns (Snack[] memory);
-    function buySnack(string memory snackName) external payable;
-    function refillSnack(string memory snackName, uint amount) external;
-    function addSnack(string memory snackName, uint amount, uint price) external;
+    function showSnaccs() external view returns (Snacc[] memory);
+    function buySnacc(string memory snaccName) external payable;
+    function refillSnacc(string memory snaccName, uint amount) external;
+    function addSnacc(string memory snaccName, uint amount, uint priceInWei) external;
     function withdraw() external;
 
-    error CallerNotOwner(address caller, address owner);
-    error SnackDoesNotExist(string snackName);
-    error SnackSoldOut(string snackName);
-    error SnackAlreadyExists(string snackName);
+    error SnaccDoesNotExist(string snaccName);
+    error SnaccSoldOut(string snaccName);
     error NotEnoughValueSent(uint sent, uint expected);
+    error CallerNotOwner(address caller, address owner);
+    error SnaccAlreadyAdded(string snaccName);
 }
 
 contract SnaccMachine is ISnaccMachine {
     address public owner;
-    mapping(string => Snack) snacks;
-    string[] snackNames;
+    string[] snaccNames;
+    mapping(string => Snacc) snaccs;
 
     constructor() {
         owner = msg.sender;
-        addSnack("Snickers", 5, 1   ether / 10000); // 0.00010
-        addSnack("Mars",    10, 2.5 ether / 10000); // 0.00025
-        addSnack("Bounty",  15, 3   ether / 10000); // 0.00030
-        addSnack("Twix",    20, 3.5 ether / 10000); // 0.00035
-    }
+        addSnacc("Twix",     40, (4.0 ether / 10000));   // 0.00040 wai
+        addSnacc("Mars",     30, (5.0 ether / 10000));   // 0.00050 wai
+        addSnacc("Bounty",   20, (7.5 ether / 10000));   // 0.00075 wai
+        addSnacc("Snickers", 10, (9.9 ether / 10000));   // 0.00099 wai
+    } 
 
-    function getSnacks() external view override returns (Snack[] memory) {
-        Snack[] memory snacksView = new Snack[](snackNames.length);
-
-        for (uint index = 0; index < snackNames.length; index++) {
-            snacksView[index] = snacks[snackNames[index]];
+    function showSnaccs() external view override returns (Snacc[] memory) {
+        Snacc[] memory snaccsView = new Snacc[](snaccNames.length);
+        for (uint index = 0; index < snaccNames.length; index++) {
+            snaccsView[index] = snaccs[snaccNames[index]];
         }
-
-        return snacksView;
+        return snaccsView;
     }
 
-    function buySnack(string memory snackName) external payable override enforceSnackExists(snackName) {
-        if (snacks[snackName].amount == 0) revert SnackSoldOut(snackName);
-        if (msg.value < snacks[snackName].price) revert NotEnoughValueSent(msg.value, snacks[snackName].price);
-
-        snacks[snackName].amount -= 1;
-
-        uint change = msg.value - snacks[snackName].price;
-        payable(msg.sender).transfer(change);
+    function buySnacc(string memory snaccName) external payable override enforceSnaccExists(snaccName) enforceSnaccNotSoldOut(snaccName) enforceEnoughValueSentForSnacc(snaccName) {
+        snaccs[snaccName].amount -= 1;
+        uint changeInWei = msg.value - snaccs[snaccName].priceInWei;
+        payable(msg.sender).transfer(changeInWei);
     }
 
-    function refillSnack(string memory snackName, uint amount) external override enforceCallerIsOwner() enforceSnackExists(snackName) {
-        snacks[snackName].amount += amount;
+    function refillSnacc(string memory snaccName, uint amount) external override enforceCallerIsOwner() enforceSnaccExists(snaccName) {
+        snaccs[snaccName].amount += amount;
     }
 
-    function addSnack(string memory snackName, uint amount, uint price) public override enforceCallerIsOwner() enforceSnackDoesNotExist(snackName) {
-        snacks[snackName] = Snack(amount, price);
-        snackNames.push(snackName);
+    function addSnacc(string memory snaccName, uint amount, uint priceInWei) public override enforceCallerIsOwner() enforceSnaccNotAlreadyAdded(snaccName) {
+        snaccs[snaccName] = Snacc(amount, priceInWei);
+        snaccNames.push(snaccName);
     }
 
     function withdraw() external override enforceCallerIsOwner() {
         payable(msg.sender).transfer(address(this).balance);
+    }
+
+    function exists(string memory snaccName) internal view returns (bool) {
+        return snaccs[snaccName].priceInWei != 0;
+    }
+
+    modifier enforceSnaccExists(string memory snaccName) {
+        if (exists(snaccName) == false) revert SnaccDoesNotExist(snaccName);
+        _;
+    }
+
+    modifier enforceSnaccNotSoldOut(string memory snaccName) {
+        if (snaccs[snaccName].amount == 0) revert SnaccSoldOut(snaccName);
+        _;
+    }
+
+    modifier enforceEnoughValueSentForSnacc(string memory snaccName) {
+        if (msg.value < snaccs[snaccName].priceInWei) revert NotEnoughValueSent(msg.value, snaccs[snaccName].priceInWei);
+        _;
     }
 
     modifier enforceCallerIsOwner() {
@@ -71,17 +84,8 @@ contract SnaccMachine is ISnaccMachine {
         _;
     }
 
-    modifier enforceSnackExists(string memory snackName) {
-        if (exists(snackName) == false) revert SnackDoesNotExist(snackName);
+    modifier enforceSnaccNotAlreadyAdded(string memory snaccName) {
+        if (exists(snaccName)) revert SnaccAlreadyAdded(snaccName);
         _;
-    }
-
-    modifier enforceSnackDoesNotExist(string memory snackName) {
-        if (exists(snackName)) revert SnackAlreadyExists(snackName);
-        _;
-    }
-
-    function exists(string memory snackName) internal view returns (bool) {
-        return snacks[snackName].price != 0;
     }
 }
